@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(host_runtime LANGUAGES C CXX)
 
+set(ASCEND_TARGET_DIR "${ASCEND_HOME_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux")
+
 # Build complete include list
 set(CMAKE_CUSTOM_INCLUDE_DIRS "")
 list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
@@ -69,10 +71,22 @@ target_include_directories(host_runtime
         ${CMAKE_CUSTOM_INCLUDE_DIRS}
     PRIVATE
         ${ASCEND_HOME_PATH}/include
+        ${ASCEND_HOME_PATH}/include/experiment/runtime
+        ${ASCEND_HOME_PATH}/include/experiment/msprof
         ${ASCEND_HOME_PATH}/pkg_inc
         ${ASCEND_HOME_PATH}/pkg_inc/runtime
+        ${ASCEND_HOME_PATH}/pkg_inc/runtime/runtime
         ${ASCEND_HOME_PATH}/pkg_inc/profiling
-        ${ASCEND_HOME_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/include/driver
+        ${ASCEND_HOME_PATH}/pkg_inc/toolchain
+        ${ASCEND_TARGET_DIR}/include
+        ${ASCEND_TARGET_DIR}/include/experiment/runtime
+        ${ASCEND_TARGET_DIR}/include/experiment/msprof
+        ${ASCEND_TARGET_DIR}/include/driver
+        ${ASCEND_TARGET_DIR}/pkg_inc
+        ${ASCEND_TARGET_DIR}/pkg_inc/runtime
+        ${ASCEND_TARGET_DIR}/pkg_inc/runtime/runtime
+        ${ASCEND_TARGET_DIR}/pkg_inc/profiling
+        ${ASCEND_TARGET_DIR}/pkg_inc/toolchain
 )
 
 target_link_directories(host_runtime

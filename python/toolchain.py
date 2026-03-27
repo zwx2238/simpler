@@ -1,5 +1,7 @@
 
 import os
+import shutil
+import subprocess
 from enum import IntEnum
 from typing import List, Optional
 import env_manager
@@ -42,6 +44,27 @@ class Toolchain:
         raise NotImplementedError
 
 
+def _resolve_tool_path(
+    override_env: str,
+    candidate_names: List[str],
+    candidate_paths: List[str],
+) -> Optional[str]:
+    override = os.environ.get(override_env)
+    if override and os.path.isfile(override):
+        return override
+
+    for name in candidate_names:
+        resolved = shutil.which(name)
+        if resolved:
+            return resolved
+
+    for path in candidate_paths:
+        if path and os.path.isfile(path):
+            return path
+
+    return override
+
+
 class CCECToolchain(Toolchain):
     """Ascend ccec compiler for AICore kernels."""
 
@@ -49,12 +72,26 @@ class CCECToolchain(Toolchain):
         super().__init__()
         self.platform = platform
 
-        self.cxx_path = os.path.join(self.ascend_home_path, "bin", "ccec")
-        self.linker_path = os.path.join(self.ascend_home_path, "bin", "ld.lld")
+        self.cxx_path = _resolve_tool_path(
+            "SETUP_ASCEND_BISHENG_BIN",
+            ["bisheng"],
+            [
+                os.path.join(self.ascend_home_path, "bin", "bisheng"),
+                os.path.join(self.ascend_home_path, "compiler", "ccec_compiler", "bin", "bisheng"),
+            ],
+        )
+        self.linker_path = _resolve_tool_path(
+            "SETUP_ASCEND_LD_LLD_BIN",
+            ["ld.lld"],
+            [
+                os.path.join(self.ascend_home_path, "bin", "ld.lld"),
+                os.path.join(self.ascend_home_path, "compiler", "ccec_compiler", "bin", "ld.lld"),
+            ],
+        )
 
         if not os.path.isfile(self.cxx_path):
             raise FileNotFoundError(
-                f"ccec compiler not found: {self.cxx_path}"
+                f"bisheng compiler not found: {self.cxx_path}"
             )
         if not os.path.isfile(self.linker_path):
             raise FileNotFoundError(
@@ -95,12 +132,35 @@ class Gxx15Toolchain(Toolchain):
 
     def __init__(self):
         super().__init__()
-        self.cxx_path = "g++-15"
+        configured_cxx = os.environ.get("CXX")
+        self.cxx_path = (
+            shutil.which(configured_cxx) if configured_cxx else None
+        ) or shutil.which("g++-15") or shutil.which("g++") or configured_cxx or "g++-15"
+        self.cxx_std_flag = self._choose_cpp_std_flag()
+
+    def _choose_cpp_std_flag(self) -> str:
+        if self.cxx_path == "g++-15":
+            return "-std=c++23"
+
+        try:
+            result = subprocess.run(
+                [self.cxx_path, "-std=c++23", "-x", "c++", "-E", "-"],
+                input="",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode == 0:
+                return "-std=c++23"
+        except OSError:
+            pass
+
+        return "-std=gnu++2a"
 
     def get_compile_flags(self, core_type: str = "", **kwargs) -> List[str]:
         flags = [
             "-shared", "-O2", "-fPIC",
-            "-std=c++23",
+            self.cxx_std_flag,
             "-fpermissive",
             "-Wno-macro-redefined",
             "-Wno-ignored-attributes",
@@ -132,7 +192,8 @@ class GxxToolchain(Toolchain):
 
     def __init__(self):
         super().__init__()
-        self.cxx_path = "g++"
+        configured_cxx = os.environ.get("CXX")
+        self.cxx_path = (shutil.which(configured_cxx) if configured_cxx else None) or "g++"
 
     def get_compile_flags(self, **kwargs) -> List[str]:
         return ["-shared", "-fPIC", "-O3", "-g", "-std=c++17"]
@@ -155,13 +216,25 @@ class Aarch64GxxToolchain(Toolchain):
 
     def __init__(self):
         super().__init__()
-        self.cxx_path = os.path.join(
-            self.ascend_home_path, "tools", "hcc", "bin",
-            "aarch64-target-linux-gnu-g++",
+        self.cxx_path = _resolve_tool_path(
+            "SETUP_ASCEND_HCC_GXX_BIN",
+            ["aarch64-target-linux-gnu-g++"],
+            [
+                os.path.join(
+                    self.ascend_home_path, "toolkit", "toolchain", "hcc", "bin",
+                    "aarch64-target-linux-gnu-g++",
+                ),
+            ],
         )
-        self.cc_path = os.path.join(
-            self.ascend_home_path, "tools", "hcc", "bin",
-            "aarch64-target-linux-gnu-gcc",
+        self.cc_path = _resolve_tool_path(
+            "SETUP_ASCEND_HCC_GCC_BIN",
+            ["aarch64-target-linux-gnu-gcc"],
+            [
+                os.path.join(
+                    self.ascend_home_path, "toolkit", "toolchain", "hcc", "bin",
+                    "aarch64-target-linux-gnu-gcc",
+                ),
+            ],
         )
         if not os.path.isfile(self.cc_path):
             raise FileNotFoundError(

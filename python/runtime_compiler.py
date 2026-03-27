@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -305,7 +306,7 @@ class RuntimeCompiler:
         build_dir: Optional[str] = None,
     ) -> bytes:
         """
-        Run CMake configuration and Make build in a temporary directory.
+        Run CMake configuration and build in a temporary directory.
 
         Args:
             cmake_source_dir: Path to CMake source directory
@@ -317,14 +318,28 @@ class RuntimeCompiler:
             Compiled binary data as bytes
 
         Raises:
-            RuntimeError: If CMake or Make fails
+            RuntimeError: If CMake or build fails
             FileNotFoundError: If output binary not found
         """
-        cmake_cmd = ["cmake", cmake_source_dir] + cmake_args
+        cmake_exe = shutil.which("cmake") or "cmake"
+        ninja_exe = shutil.which("ninja")
+
+        generator_args: List[str] = []
+        if ninja_exe:
+            generator_args = ["-G", "Ninja", f"-DCMAKE_MAKE_PROGRAM={ninja_exe}"]
+
+        cmake_cmd = [cmake_exe] + generator_args + [cmake_source_dir] + cmake_args
         self._run_build_step(cmake_cmd, build_dir, platform, "CMake configuration")
 
-        make_cmd = ["make", f"-j{min(multiprocessing.cpu_count(), 32)}", "VERBOSE=1"]
-        self._run_build_step(make_cmd, build_dir, platform, "Make build")
+        build_cmd = [
+            cmake_exe,
+            "--build",
+            ".",
+            "--parallel",
+            str(min(multiprocessing.cpu_count(), 32)),
+            "--verbose",
+        ]
+        self._run_build_step(build_cmd, build_dir, platform, "Build")
 
         # Read the compiled binary
         binary_path = os.path.join(build_dir, binary_name)
@@ -338,4 +353,3 @@ class RuntimeCompiler:
             binary_data = f.read()
 
         return binary_data
-

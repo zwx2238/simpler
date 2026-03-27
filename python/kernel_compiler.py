@@ -226,26 +226,30 @@ class KernelCompiler:
         return binary_data
 
     def _get_toolchain(self, strategy_fn, fallback_map: dict) -> ToolchainType:
-        """Get toolchain from C++ library, with platform-based fallback.
+        """Get toolchain for the current platform.
 
-        Args:
-            strategy_fn: Callable that queries C++ for the toolchain
-                         (e.g., get_incore_compiler, get_orchestration_compiler)
-            fallback_map: Dict mapping platform name to ToolchainType fallback
+        By default we use the platform fallback directly. The runtime C library
+        can be bound later in the process, which makes strategy lookups depend on
+        global loader state; that is too fragile for bootstrap/runtime-cache
+        builds. Set SIMPLER_USE_RUNTIME_TOOLCHAIN=1 to opt back into querying the
+        loaded runtime library first.
 
         Returns:
-            ToolchainType for the current platform/runtime
+            ToolchainType for the current platform
 
         Raises:
-            ValueError: If platform has no fallback and library is not loaded
+            ValueError: If platform has no fallback
         """
-        try:
-            return strategy_fn()
-        except RuntimeError:
-            logger.debug("C++ library not loaded, using platform-based fallback")
-            if self.platform not in fallback_map:
-                raise ValueError(f"No toolchain fallback for platform: {self.platform}")
-            return fallback_map[self.platform]
+        if self.platform not in fallback_map:
+            raise ValueError(f"No toolchain fallback for platform: {self.platform}")
+
+        if os.environ.get("SIMPLER_USE_RUNTIME_TOOLCHAIN") == "1":
+            try:
+                return strategy_fn()
+            except RuntimeError:
+                logger.debug("Runtime toolchain query unavailable, using platform fallback")
+
+        return fallback_map[self.platform]
 
     @staticmethod
     def _make_temp_path(prefix: str, suffix: str, build_dir: Optional[str]=None) -> str:
@@ -300,6 +304,7 @@ class KernelCompiler:
         if incore_toolchain == ToolchainType.HOST_GXX_15:
             return self._compile_incore_sim(
                 source_path,
+                core_type=core_type,
                 pto_isa_root=pto_isa_root,
                 extra_include_dirs=extra_include_dirs,
                 build_dir=build_dir,
@@ -467,6 +472,7 @@ class KernelCompiler:
     def _compile_incore_sim(
         self,
         source_path: str,
+        core_type: str = "aiv",
         pto_isa_root: Optional[str] = None,
         extra_include_dirs: Optional[List[str]] = None,
         build_dir: Optional[str] = None,
@@ -476,6 +482,7 @@ class KernelCompiler:
 
         Args:
             source_path: Path to kernel source file (.cpp)
+            core_type: Core type: "aic" (cube) or "aiv" (vector).
             pto_isa_root: Path to PTO-ISA root directory (for PTO ISA headers)
             extra_include_dirs: Additional include directories
 
@@ -498,7 +505,7 @@ class KernelCompiler:
             build_dir=build_dir)
 
         # Build command from toolchain
-        cmd = [self.gxx15.cxx_path] + self.gxx15.get_compile_flags()
+        cmd = [self.gxx15.cxx_path] + self.gxx15.get_compile_flags(core_type=core_type)
 
         # Add PTO ISA header paths if provided
         if pto_isa_root:

@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(aicpu_kernel LANGUAGES C CXX)
 
+set(ASCEND_TARGET_DIR "${ASCEND_HOME_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux")
+
 # Build complete include list
 set(CMAKE_CUSTOM_INCLUDE_DIRS "")
 list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
@@ -61,8 +63,25 @@ target_include_directories(aicpu_kernel
         ${CMAKE_CUSTOM_INCLUDE_DIRS}
     PRIVATE
         ${ASCEND_HOME_PATH}/include
+        ${ASCEND_HOME_PATH}/include/experiment/runtime
+        ${ASCEND_HOME_PATH}/include/experiment/msprof
         ${ASCEND_HOME_PATH}/include/toolchain
         ${ASCEND_HOME_PATH}/pkg_inc/base
+        ${ASCEND_HOME_PATH}/pkg_inc
+        ${ASCEND_HOME_PATH}/pkg_inc/runtime
+        ${ASCEND_HOME_PATH}/pkg_inc/runtime/runtime
+        ${ASCEND_HOME_PATH}/pkg_inc/profiling
+        ${ASCEND_HOME_PATH}/pkg_inc/toolchain
+        ${ASCEND_TARGET_DIR}/include
+        ${ASCEND_TARGET_DIR}/include/experiment/runtime
+        ${ASCEND_TARGET_DIR}/include/experiment/msprof
+        ${ASCEND_TARGET_DIR}/include/toolchain
+        ${ASCEND_TARGET_DIR}/pkg_inc
+        ${ASCEND_TARGET_DIR}/pkg_inc/base
+        ${ASCEND_TARGET_DIR}/pkg_inc/runtime
+        ${ASCEND_TARGET_DIR}/pkg_inc/runtime/runtime
+        ${ASCEND_TARGET_DIR}/pkg_inc/profiling
+        ${ASCEND_TARGET_DIR}/pkg_inc/toolchain
 )
 
 target_link_directories(aicpu_kernel
@@ -74,4 +93,3 @@ target_link_directories(aicpu_kernel
 
 # Output name
 set_target_properties(aicpu_kernel PROPERTIES OUTPUT_NAME aicpu_kernel)
-
