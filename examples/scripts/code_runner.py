@@ -957,6 +957,7 @@ class CodeRunner:
                         arg_types=arg_types,
                         arg_sizes=arg_sizes,
                         kernel_binaries=kernel_binaries,
+                        orch_thread_num=self.orch_thread_num,
                     )
 
                 launch_runtime(

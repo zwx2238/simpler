@@ -458,20 +458,14 @@ int DeviceRunner::run(Runtime& runtime,
             }
         });
 
-        std::cout << "\n=== rtStreamSynchronize stream_aicpu_===" << '\n';
-        // Synchronize streams
-        rc = rtStreamSynchronize(stream_aicpu_);
-        if (rc != 0) {
-            LOG_ERROR("rtStreamSynchronize (AICPU) failed: %d", rc);
-            return rc;
-        }
-
         std::cout << "\n=== rtStreamSynchronize stream_aicore_===" << '\n';
         rc = rtStreamSynchronize(stream_aicore_);
         if (rc != 0) {
             LOG_ERROR("rtStreamSynchronize (AICore) failed: %d", rc);
             return rc;
         }
+
+        LOG_INFO("Skipping rtStreamSynchronize(stream_aicpu_) because DynTileFwkKernelServer is a long-lived scheduler service");
     }
 
     // Stop memory management, drain remaining buffers, collect phase data, export
@@ -741,4 +735,3 @@ void DeviceRunner::poll_and_collect_performance_data(int expected_tasks) {
 int DeviceRunner::export_swimlane_json(const std::string& output_path) {
     return perf_collector_.export_swimlane_json(output_path);
 }
-

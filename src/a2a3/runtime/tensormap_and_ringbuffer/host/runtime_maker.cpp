@@ -284,11 +284,20 @@ extern "C" int init_runtime_impl(Runtime *runtime,
     runtime->set_pto2_gm_sm_ptr(sm_ptr);
     runtime->record_tensor_pair(nullptr, sm_ptr, static_cast<size_t>(sm_size));
 
-    // Set up device orchestration state
-    runtime->set_orch_built_on_host(false);
-    runtime->set_orch_args(device_args, orch_args_count);
+    LOG_INFO("Runtime orchestration config: orch_thread_num=%d", runtime->orch_thread_num);
 
-    LOG_INFO("Device orchestration ready: %d args", orch_args_count);
+    // Set up orchestration state.
+    // When orch_thread_num == 0, there is no device-side orchestrator thread to
+    // populate PTO2 shared memory, so the scheduler must not wait for
+    // runtime_init_ready_ from a non-existent orchestrator.
+    if (runtime->orch_thread_num == 0) {
+        runtime->set_orch_built_on_host(true);
+        LOG_INFO("Host orchestration mode selected: orch_thread_num=0");
+    } else {
+        runtime->set_orch_built_on_host(false);
+        runtime->set_orch_args(device_args, orch_args_count);
+        LOG_INFO("Device orchestration ready: %d args", orch_args_count);
+    }
 
     long long t_total_end = _now_ms();
     LOG_INFO("TIMING: args_malloc_copy = %lldms", t_args_end - t_args_start);

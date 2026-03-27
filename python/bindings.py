@@ -154,6 +154,7 @@ class RuntimeLibraryLoader:
             POINTER(POINTER(c_uint8)),  # kernel_binaries (array of binary pointers)
             POINTER(c_size_t),      # kernel_sizes (array of sizes)
             c_int,                  # kernel_count
+            c_int,                  # orch_thread_num
         ]
         self.lib.init_runtime.restype = c_int
 
@@ -252,6 +253,7 @@ class Runtime:
         arg_types: Optional[List[int]] = None,
         arg_sizes: Optional[List[int]] = None,
         kernel_binaries: Optional[List[Tuple[int, bytes]]] = None,
+        orch_thread_num: int = 1,
     ) -> None:
         """
 
@@ -274,6 +276,7 @@ class Runtime:
             arg_types: Array describing each argument's IO direction (ARG_SCALAR, ARG_INPUT_PTR, etc.)
             arg_sizes: Array of byte sizes for tensor arguments (0 for scalars)
             kernel_binaries: List of (func_id, binary_data) tuples for kernel registration
+            orch_thread_num: Number of device orchestrator threads used by RT2 runtime setup
 
         Raises:
             RuntimeError: If initialization fails
@@ -341,6 +344,7 @@ class Runtime:
             binaries_array,
             sizes_array,
             kernel_count,
+            orch_thread_num,
         )
         if rc != 0:
             raise RuntimeError(f"init_runtime failed: {rc}")

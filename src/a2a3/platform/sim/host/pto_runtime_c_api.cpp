@@ -64,7 +64,8 @@ int init_runtime(RuntimeHandle runtime,
                 const int* kernel_func_ids,
                 const uint8_t* const* kernel_binaries,
                 const size_t* kernel_sizes,
-                int kernel_count) {
+                int kernel_count,
+                int orch_thread_num) {
     if (runtime == NULL) {
         return -1;
     }
@@ -74,6 +75,10 @@ int init_runtime(RuntimeHandle runtime,
     try {
         // Placement new to construct Runtime in user-allocated memory
         Runtime* r = new (runtime) Runtime();
+        r->orch_thread_num = orch_thread_num;
+        if (orch_thread_num == 0) {
+            r->set_orch_built_on_host(true);
+        }
 
         // Initialize host API function pointers
         r->host_api.device_malloc = device_malloc;

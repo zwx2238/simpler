@@ -47,8 +47,9 @@
 
 // Device orchestration function signature (loaded via dlopen).
 // The executor binds the current thread's PTO2Runtime into orchestration TLS
-// before calling the user entry.
-typedef void (*DeviceOrchestrationFunc)(TaskArg* orch_args,
+// before calling the user entry, so the exported entry only needs the
+// orchestration arguments plus topology metadata.
+typedef void (*DeviceOrchestrationFunc)(TaskArg* orch_args, int32_t arg_count,
                                         int32_t orch_thread_num, int32_t orch_thread_index);
 typedef void (*DeviceOrchestrationBindRuntimeFunc)(PTO2Runtime* rt);
 
@@ -1060,29 +1061,39 @@ int32_t AicpuExecutor::resolve_and_dispatch_pto2(Runtime* runtime, int32_t threa
         uint64_t _t0_phase = _t0;
 #endif
         int32_t task_count = 0;
-        if (!tracker.has_any_running_cores()) {
-            bool orch_done = orchestrator_done_;
-            if (orch_done) {
-                // Check for orchestrator fatal error — exit immediately
-                int32_t orch_err = header->orch_error_code.load(std::memory_order_acquire);
-                if (orch_err != PTO2_ERROR_NONE) {
-                    DEV_ERROR("Thread %d: Fatal error (code=%d), sending EXIT_SIGNAL to all cores. "
-                               "completed_tasks=%d, total_tasks=%d",
-                               thread_idx, orch_err,
-                               completed_tasks_.load(std::memory_order_relaxed),
-                               total_tasks_);
-                    emergency_shutdown(runtime);
-                    completed_.store(true, std::memory_order_release);
-                    break;
-                }
+        bool orch_done = orchestrator_done_;
+        if (orch_done) {
+            // Check for orchestrator fatal error — exit immediately.
+            int32_t orch_err = header->orch_error_code.load(std::memory_order_acquire);
+            if (orch_err != PTO2_ERROR_NONE) {
+                DEV_ERROR("Thread %d: Fatal error (code=%d), sending EXIT_SIGNAL to all cores. "
+                           "completed_tasks=%d, total_tasks=%d",
+                           thread_idx, orch_err,
+                           completed_tasks_.load(std::memory_order_relaxed),
+                           total_tasks_);
+                emergency_shutdown(runtime);
+                completed_.store(true, std::memory_order_release);
+                break;
+            }
 
-                // Normal exit: all tasks complete
-                task_count = total_tasks_;
-                if (task_count > 0 && completed_tasks_.load(std::memory_order_relaxed) >= task_count) {
-                    completed_.store(true, std::memory_order_release);
-                    DEV_INFO("Thread %d: PTO2 completed tasks %d/%d", thread_idx, completed_tasks_.load(std::memory_order_relaxed), task_count);
-                    break;
-                }
+            task_count = total_tasks_;
+
+            // Once all submitted tasks have completed, the remaining live cores are
+            // only parked in the long-lived AICore worker loop. Break out so the
+            // shutdown path below can send EXIT_SIGNAL to every assigned core.
+            if (task_count > 0 && completed_tasks_.load(std::memory_order_relaxed) >= task_count) {
+                completed_.store(true, std::memory_order_release);
+                DEV_INFO("Thread %d: PTO2 completed tasks %d/%d", thread_idx,
+                         completed_tasks_.load(std::memory_order_relaxed), task_count);
+                break;
+            }
+
+            // Zero-task orchestration still needs all running cores drained before
+            // shutdown, otherwise we may race startup on an empty graph.
+            if (!tracker.has_any_running_cores() && task_count == 0) {
+                completed_.store(true, std::memory_order_release);
+                DEV_INFO("Thread %d: PTO2 completed empty orchestration", thread_idx);
+                break;
             }
         }
 
@@ -1812,7 +1823,7 @@ int32_t AicpuExecutor::run(Runtime* runtime) {
                 orch_bind_runtime_(rt);
             }
             pto2_rt_scope_begin(rt);
-            orch_func_(orch_args_cached_, orch_thread_num_, orch_idx);
+            orch_func_(orch_args_cached_, runtime->get_orch_arg_count(), orch_thread_num_, orch_idx);
             pto2_rt_scope_end(rt);
             if (orch_bind_runtime_ != nullptr) {
                 orch_bind_runtime_(nullptr);

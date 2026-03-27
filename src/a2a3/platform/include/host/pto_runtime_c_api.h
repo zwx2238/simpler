@@ -92,6 +92,7 @@ size_t get_runtime_size(void);
  * @param kernel_binaries   Array of pointers to kernel binary data
  * @param kernel_sizes      Array of kernel binary sizes in bytes
  * @param kernel_count      Number of kernels to register
+ * @param orch_thread_num   Number of orchestrator threads for RT2 runtime setup
  * @return 0 on success, -1 on failure
  */
 int init_runtime(RuntimeHandle runtime,
@@ -105,7 +106,8 @@ int init_runtime(RuntimeHandle runtime,
                 const int* kernel_func_ids,
                 const uint8_t* const* kernel_binaries,
                 const size_t* kernel_sizes,
-                int kernel_count);
+                int kernel_count,
+                int orch_thread_num);
 
 /* ===========================================================================
  * Device Memory API (for use by orchestration functions)

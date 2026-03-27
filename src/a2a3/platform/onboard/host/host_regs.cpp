@@ -11,6 +11,7 @@
 #include "ascend_hal.h"  // CANN HAL API definitions (MODULE_TYPE_AICORE, INFO_TYPE_OCCUPY, etc.)
 #include <dlfcn.h>
 #include <iostream>
+#include <unistd.h>
 
 /**
  * Query valid AICore cores via HAL API
@@ -83,7 +84,13 @@ static int get_aicore_reg_info(std::vector<int64_t>& aic, std::vector<int64_t>& 
         nullptr);
 
     if (ret != 0) {
-        LOG_ERROR("halMemCtl failed with rc=%d", ret);
+        const char* visible_devices = getenv("ASCEND_RT_VISIBLE_DEVICES");
+        LOG_ERROR("halMemCtl failed with rc=%d (device_id=%lld, addr_type=%d, pid=%d, ASCEND_RT_VISIBLE_DEVICES=%s)",
+                  ret,
+                  static_cast<long long>(device_id),
+                  addr_type,
+                  static_cast<int>(getpid()),
+                  visible_devices != nullptr ? visible_devices : "<unset>");
         return ret;
     }
 
@@ -114,13 +121,8 @@ static void get_aicore_regs(std::vector<int64_t>& regs, uint64_t device_id) {
     int rt = get_aicore_reg_info(aic, aiv, ADDR_MAP_TYPE_REG_AIC_CTRL, device_id);
 
     if (rt != 0) {
-        LOG_ERROR("get_aicore_reg_info failed, using placeholder addresses");
-        // Fallback: generate placeholder addresses
-        for (uint32_t i = 0; i < DAV_2201::PLATFORM_MAX_PHYSICAL_CORES; i++) {
-            aic.push_back(0xDEADBEEF00000000ULL + (i * 0x800000));  // 8M stride
-            aiv.push_back(0xDEADBEEF00000000ULL + (i * 0x800000) + 0x100000);
-            aiv.push_back(0xDEADBEEF00000000ULL + (i * 0x800000) + 0x200000);
-        }
+        LOG_ERROR("get_aicore_reg_info failed (rc=%d); aborting register-based dispatch setup", rt);
+        return;
     }
 
     // AIC cores first, then AIV cores
